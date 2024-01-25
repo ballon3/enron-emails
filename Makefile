@@ -1,7 +1,15 @@
+# Define variables
+AWS_REGION := us-west-2
+ECR_REPOSITORY := your-ecr-repository-name
+IMAGE_TAG := latest
+IMAGE_NAME := go-api-image
 # Define commands for backend
 BACKEND_DIR := ./backend/cmd/server
 FRONTEND_DIR := ./frontend
 ZINC_DIR := ./zincsearch
+
+# AWS ECR URL (replace with your actual ECR URL)
+ECR_URL := $(shell aws ecr describe-repositories --repository-names $(ECR_REPOSITORY) --region $(AWS_REGION) --query 'repositories[0].repositoryUri' --output text)
 
 .PHONY: run-backend
 run-backend:
@@ -57,3 +65,22 @@ setup-dataset:
 run-indexer:
 	cd backend/cmd/indexer; go run main.go
 
+.PHONY: build-image
+build-image:
+	docker build -t $(IMAGE_NAME) .
+
+.PHONY: ecr-login
+ecr-login:
+	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(ECR_URL)
+
+.PHONY: tag-image
+tag-image:
+	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(ECR_URL):$(IMAGE_TAG)
+
+.PHONY: push-image
+push-image:
+	docker push $(ECR_URL):$(IMAGE_TAG)
+
+# Combined command to build and push the image
+.PHONY: deploy-image
+deploy-image: build-image ecr-login tag-image push-image
